@@ -73,21 +73,41 @@ def create_project():
     if not type_:
         return jsonify({"error": "Type not found"}), 404
 
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-
-    new_project = Project(name=name, description=description, country_id=country_id, type_id=type_id, file_path=filepath)
-
+    # Создаем запись в БД, чтобы получить project_id
+    new_project = Project(name=name, description=description, country_id=country_id, type_id=type_id)
     db_session.add(new_project)
+    db_session.commit()  # Коммит, чтобы project_id был назначен
+
+    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(new_project.project_id))
+    os.makedirs(project_folder, exist_ok=True)
+
+    # Сохранение файла
+    if 'file' in request.files:
+        file = request.files['file']
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(project_folder, filename)
+        file.save(filepath)
+        new_project.file_path = filepath
+
+    # Сохранение изображения
+    if 'image' in request.files:
+        image = request.files['image']
+        imagename = secure_filename(image.filename)
+        imagepath = os.path.join(project_folder, imagename)
+        image.save(imagepath)
+        new_project.image_path = imagepath
+
+    # Сохранение координат
+    new_project.latitude = request.form.get('latitude')
+    new_project.longitude = request.form.get('longitude')
+
     try:
         db_session.commit()
     except IntegrityError:
         db_session.rollback()
         return jsonify({"error": "Integrity error"}), 400
 
-    return jsonify({"message": "Project created successfully"}), 201
+    return jsonify({"message": "Project created successfully", "project_id": new_project.project_id}), 201
 
 
 @app.route('/api/projects', methods=['GET'])
@@ -129,12 +149,28 @@ def update_project(project_id):
     project.country_id = country_id
     project.type_id = type_id
 
+    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(project.project_id))
+    os.makedirs(project_folder, exist_ok=True)
+
+    # Обновление файла
     if 'file' in request.files:
         file = request.files['file']
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        filepath = os.path.join(project_folder, filename)
         file.save(filepath)
         project.file_path = filepath
+
+    # Обновление изображения
+    if 'image' in request.files:
+        image = request.files['image']
+        imagename = secure_filename(image.filename)
+        imagepath = os.path.join(project_folder, imagename)
+        image.save(imagepath)
+        project.image_path = imagepath
+
+    # Обновление координат
+    project.latitude = request.form.get('latitude', project.latitude)
+    project.longitude = request.form.get('longitude', project.longitude)
 
     db_session.commit()
     return jsonify({"message": "Project updated successfully"}), 200
@@ -144,9 +180,18 @@ def update_project(project_id):
 def get_project_file(project_id):
     project = db_session.query(Project).filter(Project.project_id == project_id).first()
     if project and project.file_path:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], project.file_path.split('/')[-1])
+        return send_from_directory(os.path.dirname(project.file_path), os.path.basename(project.file_path))
     else:
         return jsonify({"error": "File not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>/image', methods=['GET'])
+def get_project_image(project_id):
+    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    if project and project.image_path:
+        return send_from_directory(os.path.dirname(project.image_path), os.path.basename(project.image_path))
+    else:
+        return jsonify({"error": "Image not found"}), 404
 
 
 if __name__ == '__main__':

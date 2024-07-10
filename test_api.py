@@ -37,14 +37,20 @@ def get_types():
 
 
 # Создание нового проекта
-def create_project(name, description, country_id, type_id, file_path):
+def create_project(name, description, country_id, type_id, lat, long,  file_path=None, image_path=None):
     url = f'{base_url}/projects'
-    files = {'file': open(file_path, 'rb')}
+    files = {}
+    if file_path:
+        files['file'] = open(file_path, 'rb')
+    if image_path:
+        files['image'] = open(image_path, 'rb')
     data = {
         'name': name,
         'description': description,
         'country_id': str(country_id),
-        'type_id': str(type_id)
+        'type_id': str(type_id),
+        'latitude': str(lat),
+        'longitude': str(long)
     }
     response = requests.post(url, files=files, data=data)
     print(response.status_code, response.json())
@@ -65,14 +71,20 @@ def get_project(project_id):
 
 
 # Обновление проекта
-def update_project(project_id, name, description, country_id, type_id, file_path):
+def update_project(project_id, name, description, country_id, type_id, lat, long, file_path=None, image_path=None):
     url = f'{base_url}/projects/{project_id}'
-    files = {'file': open(file_path, 'rb')}
+    files = {}
+    if file_path:
+        files['file'] = open(file_path, 'rb')
+    if image_path:
+        files['image'] = open(image_path, 'rb')
     data = {
         'name': name,
         'description': description,
         'country_id': str(country_id),
-        'type_id': str(type_id)
+        'type_id': str(type_id),
+        'latitude': str(lat),
+        'longitude': str(long)
     }
     response = requests.put(url, files=files, data=data)
     print(response.status_code, response.json())
@@ -90,23 +102,38 @@ def get_project_file(project_id):
         print(response.status_code, response.json())
 
 
+# Получение изображения проекта
+def get_project_image(project_id):
+    url = f'{base_url}/projects/{project_id}/image'
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(f'project_{project_id}_image.jpg', 'wb') as f:
+            f.write(response.content)
+        print(f'Image for project {project_id} downloaded successfully')
+    else:
+        print(response.status_code, response.json())
+
+
 if __name__ == '__main__':
-    # Создание страны и типа
+    # # Создание страны и типа
     # country_id = create_country('USA')
     # type_id = create_type('Map')
-    
-    # Создание проекта
-    #create_project('Project1', 'Description1', 1, 1, 'test.zip')
+    #
+    # Создание проекта с файлом и изображением
+    # create_project('Project1', 'Description1', 1, 1, 'test.zip', 'test.jpg')
 
     # # Получение списка всех проектов
-    #get_projects()
+    # get_projects()
     #
     # # Получение определенного проекта
     # get_project(1)
     #
     # # Обновление проекта
-    # update_project(1, 'UpdatedProject', 'UpdatedDescription', country_id, type_id, 'path_to_your_new_zip_file.zip')
-    #
+    # update_project(2, 'UpdatedProject', 'UpdatedDescription', 1, 1, 30, 90)
+
     # # Получение файла проекта
     # get_project_file(1)
+    #
+    # # Получение изображения проекта
+    # get_project_image(1)
     pass

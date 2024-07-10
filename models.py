@@ -15,6 +15,9 @@ class Project(Base):
     country_id = Column(Integer, ForeignKey('countries.country_id'))
     type_id = Column(Integer, ForeignKey('types.type_id'))
     file_path = Column(String)
+    latitude = Column(String)
+    longitude = Column(String)
+    image_path = Column(String)
 
     def as_dict(self):
         return {
@@ -23,7 +26,10 @@ class Project(Base):
             'description': self.description,
             'country_id': self.country_id,
             'type_id': self.type_id,
-            'file_path': self.file_path
+            'file_path': self.file_path,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'image_path': self.image_path,
         }
 
 
