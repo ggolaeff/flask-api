@@ -37,7 +37,7 @@ def get_types():
 
 
 # Создание нового проекта
-def create_project(name, description, country_id, type_id, lat, long,  file_path=None, image_path=None):
+def create_project(name, description, country_id, type_id, lat, long, file_path=None, image_path=None):
     url = f'{base_url}/projects'
     files = {}
     if file_path:
@@ -54,24 +54,39 @@ def create_project(name, description, country_id, type_id, lat, long,  file_path
     }
     response = requests.post(url, files=files, data=data)
     print(response.status_code, response.json())
+    return response.json().get('project_id')
 
 
-# Получение списка всех проектов
+# Получение списка всех проектов (последние версии)
 def get_projects():
     url = f'{base_url}/projects'
     response = requests.get(url)
     print(response.status_code, response.json())
 
 
-# Получение определенного проекта
+# Получение определенного проекта (последняя версия)
 def get_project(project_id):
     url = f'{base_url}/projects/{project_id}'
     response = requests.get(url)
     print(response.status_code, response.json())
 
 
+# Получение всех версий проекта
+def get_project_versions(project_id):
+    url = f'{base_url}/projects/{project_id}/versions'
+    response = requests.get(url)
+    print(response.status_code, response.json())
+
+
+# Получение определенной версии проекта
+def get_project_version(project_id, version_id):
+    url = f'{base_url}/projects/{project_id}/versions/{version_id}'
+    response = requests.get(url)
+    print(response.status_code, response.json())
+
+
 # Обновление проекта
-def update_project(project_id, name, description, country_id, type_id, lat, long, file_path=None, image_path=None):
+def update_project(project_id, name=None, description=None, country_id=None, type_id=None, lat=None, long=None, file_path=None, image_path=None):
     url = f'{base_url}/projects/{project_id}'
     files = {}
     if file_path:
@@ -87,7 +102,11 @@ def update_project(project_id, name, description, country_id, type_id, lat, long
         'longitude': str(long)
     }
     response = requests.put(url, files=files, data=data)
-    print(response.status_code, response.json())
+    try:
+        response_data = response.json()
+    except ValueError:
+        response_data = {"error": "Invalid response"}
+    print(response.status_code, response_data)
 
 
 # Получение файла проекта
@@ -115,25 +134,47 @@ def get_project_image(project_id):
 
 
 if __name__ == '__main__':
-    # # Создание страны и типа
+    # Создание страны и типа
     # country_id = create_country('USA')
     # type_id = create_type('Map')
-    #
-    # Создание проекта с файлом и изображением
-    # create_project('Project1', 'Description1', 1, 1, 'test.zip', 'test.jpg')
 
-    # # Получение списка всех проектов
+    # # Создание проекта с файлом и изображением
+    # print('create project')
+    # project_id = create_project('Project7', 'Description7', 1, 1, '40.7128', '-74.0060', 'test.zip', 'test.jpg')
+
+    # print('all projects before update')
+    # # Получение списка всех проектов (последние версии)
+    # get_projects()
+
+    # print('get project by id')
+    # # Получение определенного проекта (последняя версия)
+    # get_project(5)
+
+    # print('updating project')
+    # Обновление проекта: изменение описания и замена файла
+    # update_project(1, 'Project6', country_id=1, type_id=1, lat='40.7128', long='-74.0060', file_path='test2.zip')
+    #
+    # print('all projects after updating')
+    # # Получение списка всех проектов (последние версии) после обновления
     # get_projects()
     #
-    # # Получение определенного проекта
-    # get_project(1)
+    # print('get project by id after updating')
+    # # Получение определенного проекта (последняя версия) после обновления
+    # get_project(6)
     #
-    # # Обновление проекта
-    # update_project(2, 'UpdatedProject', 'UpdatedDescription', 1, 1, 30, 90)
+    # print('get all versions by project id')
+    # # Получение всех версий проекта
+    get_project_versions(1)
 
+    # print('get certain project version')
+    # # Получение определенной версии проекта (версия 1)
+    # get_project_version(6, 1)
+
+    # print('project file')
     # # Получение файла проекта
-    # get_project_file(1)
+    # get_project_file(project_id)
     #
+    # print('project image')
     # # Получение изображения проекта
-    # get_project_image(1)
+    # get_project_image(project_id)
     pass

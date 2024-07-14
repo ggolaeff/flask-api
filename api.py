@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
 from flask_cors import CORS
+from datetime import datetime
 
 from connect_db import engine
 from models import Base, Project, Country, Type
@@ -18,6 +19,11 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 Base.metadata.bind = engine
 DBSession = sessionmaker(bind=engine)
 db_session = DBSession()
+
+
+def get_new_version(id):
+    versions = db_session.query(Project).filter(Project.id == id).all()
+    return max([v.version for v in versions], default=0) + 1
 
 
 @app.route('/api/countries', methods=['POST'])
@@ -73,15 +79,15 @@ def create_project():
     if not type_:
         return jsonify({"error": "Type not found"}), 404
 
-    # Создаем запись в БД, чтобы получить project_id
     new_project = Project(name=name, description=description, country_id=country_id, type_id=type_id)
-    db_session.add(new_project)
-    db_session.commit()  # Коммит, чтобы project_id был назначен
 
-    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(new_project.project_id))
+    version = get_new_version(new_project.project_id)
+
+    db_session.add(new_project)
+    db_session.commit()
+    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(new_project.project_id), f"v{version}")
     os.makedirs(project_folder, exist_ok=True)
 
-    # Сохранение файла
     if 'file' in request.files:
         file = request.files['file']
         filename = secure_filename(file.filename)
@@ -89,7 +95,6 @@ def create_project():
         file.save(filepath)
         new_project.file_path = filepath
 
-    # Сохранение изображения
     if 'image' in request.files:
         image = request.files['image']
         imagename = secure_filename(image.filename)
@@ -97,9 +102,10 @@ def create_project():
         image.save(imagepath)
         new_project.image_path = imagepath
 
-    # Сохранение координат
     new_project.latitude = request.form.get('latitude')
     new_project.longitude = request.form.get('longitude')
+    new_project.version = version
+    new_project.id = new_project.project_id
 
     try:
         db_session.commit()
@@ -107,18 +113,40 @@ def create_project():
         db_session.rollback()
         return jsonify({"error": "Integrity error"}), 400
 
-    return jsonify({"message": "Project created successfully", "project_id": new_project.project_id}), 201
+    return jsonify({"message": "Project created successfully", "project_id": new_project.project_id, "version": version}), 201
 
 
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
-    projects = db_session.query(Project).all()
-    return jsonify([project.as_dict() for project in projects])
+    projects = db_session.query(Project).order_by(Project.id, Project.version.desc()).all()
+    latest_projects = {}
+    for project in projects:
+        if project.id not in latest_projects:
+            latest_projects[project.id] = project
+    return jsonify([project.as_dict() for project in latest_projects.values()])
 
 
 @app.route('/api/projects/<int:project_id>', methods=['GET'])
 def get_project(project_id):
-    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    project = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).first()
+    if project:
+        return jsonify(project.as_dict())
+    else:
+        return jsonify({"error": "Project not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>/versions', methods=['GET'])
+def get_project_versions(project_id):
+    projects = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).all()
+    if projects:
+        return jsonify([project.as_dict() for project in projects])
+    else:
+        return jsonify({"error": "Project not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>/versions/<int:version>', methods=['GET'])
+def get_project_version(project_id, version):
+    project = db_session.query(Project).filter(Project.id == project_id, Project.version == version).first()
     if project:
         return jsonify(project.as_dict())
     else:
@@ -127,58 +155,60 @@ def get_project(project_id):
 
 @app.route('/api/projects/<int:project_id>', methods=['PUT'])
 def update_project(project_id):
-    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    project = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).first()
     if not project:
         return jsonify({"error": "Project not found"}), 404
 
-    name = request.form.get('name', project.name)
-    description = request.form.get('description', project.description)
-    country_id = request.form.get('country_id', project.country_id)
-    type_id = request.form.get('type_id', project.type_id)
+    version = get_new_version(project_id)
 
-    country = db_session.query(Country).filter(Country.country_id == country_id).first()
-    if not country:
-        return jsonify({"error": "Country not found"}), 404
+    new_project = Project(
+        id=project.id,
+        name=request.form.get('name', project.name),
+        description=request.form.get('description', project.description),
+        country_id=request.form.get('country_id', project.country_id),
+        type_id=request.form.get('type_id', project.type_id),
+        version=version,
+        latitude=request.form.get('latitude', project.latitude),
+        longitude=request.form.get('longitude', project.longitude),
+        file_path=project.file_path,
+        image_path=project.image_path
+    )
+    db_session.add(new_project)
+    db_session.commit()
 
-    type_ = db_session.query(Type).filter(Type.type_id == type_id).first()
-    if not type_:
-        return jsonify({"error": "Type not found"}), 404
-
-    project.name = name
-    project.description = description
-    project.country_id = country_id
-    project.type_id = type_id
-
-    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(project.project_id))
+    project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(new_project.id), f"v{version}")
     os.makedirs(project_folder, exist_ok=True)
 
-    # Обновление файла
     if 'file' in request.files:
         file = request.files['file']
         filename = secure_filename(file.filename)
         filepath = os.path.join(project_folder, filename)
         file.save(filepath)
-        project.file_path = filepath
+        new_project.file_path = filepath
 
-    # Обновление изображения
     if 'image' in request.files:
         image = request.files['image']
         imagename = secure_filename(image.filename)
         imagepath = os.path.join(project_folder, imagename)
         image.save(imagepath)
-        project.image_path = imagepath
-
-    # Обновление координат
-    project.latitude = request.form.get('latitude', project.latitude)
-    project.longitude = request.form.get('longitude', project.longitude)
+        new_project.image_path = imagepath
 
     db_session.commit()
-    return jsonify({"message": "Project updated successfully"}), 200
+    return jsonify({"message": "Project updated successfully", "version": version}), 200
 
 
 @app.route('/api/projects/<int:project_id>/file', methods=['GET'])
 def get_project_file(project_id):
-    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    project = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).first()
+    if project and project.file_path:
+        return send_from_directory(os.path.dirname(project.file_path), os.path.basename(project.file_path))
+    else:
+        return jsonify({"error": "File not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>/file/<int:version>', methods=['GET'])
+def get_project_version_file(project_id, version):
+    project = db_session.query(Project).filter(Project.id == project_id, Project.version == version).first()
     if project and project.file_path:
         return send_from_directory(os.path.dirname(project.file_path), os.path.basename(project.file_path))
     else:
@@ -187,7 +217,16 @@ def get_project_file(project_id):
 
 @app.route('/api/projects/<int:project_id>/image', methods=['GET'])
 def get_project_image(project_id):
-    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    project = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).first()
+    if project and project.image_path:
+        return send_from_directory(os.path.dirname(project.image_path), os.path.basename(project.image_path))
+    else:
+        return jsonify({"error": "Image not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>/image/<int:version>', methods=['GET'])
+def get_project_version_image(project_id, version):
+    project = db_session.query(Project).filter(Project.id == project_id, Project.version == version).first()
     if project and project.image_path:
         return send_from_directory(os.path.dirname(project.image_path), os.path.basename(project.image_path))
     else:
