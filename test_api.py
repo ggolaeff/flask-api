@@ -57,11 +57,26 @@ def create_project(name, description, country_id, type_id, lat, long, file_path=
     return response.json().get('project_id')
 
 
-# Получение списка всех проектов (последние версии)
-def get_projects():
+# Функция для получения списка проектов с возможностью фильтрации
+def get_projects(country_id=None, type_id=None, search_text=None):
     url = f'{base_url}/projects'
-    response = requests.get(url)
-    print(response.status_code, response.json())
+    params = {}
+    if country_id:
+        params['country_id'] = country_id
+    if type_id:
+        params['type_id'] = type_id
+    if search_text:
+        params['search_text'] = search_text
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        print("Запрос успешен")
+        projects = response.json()
+        for project in projects:
+            print(project)
+    else:
+        print(f"Ошибка: {response.status_code}")
+        print(response.json())
 
 
 # Получение определенного проекта (последняя версия)
@@ -109,6 +124,27 @@ def update_project(project_id, name=None, description=None, country_id=None, typ
     print(response.status_code, response_data)
 
 
+# Удаление проекта
+def delete_project(project_id):
+    url = f'{base_url}/projects/{project_id}'
+    response = requests.delete(url)
+    print(response.status_code, response.json())
+
+
+# Удаление страны
+def delete_country(country_id):
+    url = f'{base_url}/countries/{country_id}'
+    response = requests.delete(url)
+    print(response.status_code, response.json())
+
+
+# Удаление типа
+def delete_type(type_id):
+    url = f'{base_url}/types/{type_id}'
+    response = requests.delete(url)
+    print(response.status_code, response.json())
+
+
 # Получение файла проекта
 def get_project_file(project_id):
     url = f'{base_url}/projects/{project_id}/file'
@@ -135,46 +171,26 @@ def get_project_image(project_id):
 
 if __name__ == '__main__':
     # Создание страны и типа
-    # country_id = create_country('USA')
-    # type_id = create_type('Map')
-
+    # country_id = create_country('Russia')
+    # # type_id = create_type('Map')
+    #
     # # Создание проекта с файлом и изображением
-    # print('create project')
-    # project_id = create_project('Project7', 'Description7', 1, 1, '40.7128', '-74.0060', 'test.zip', 'test.jpg')
-
-    # print('all projects before update')
+    # project_id = create_project('New_project', 'proj', country_id, 1, '40.7128', '-74.0060', 'test.zip', 'test.jpg')
+    #
     # # Получение списка всех проектов (последние версии)
-    # get_projects()
-
-    # print('get project by id')
-    # # Получение определенного проекта (последняя версия)
-    # get_project(5)
-
-    # print('updating project')
-    # Обновление проекта: изменение описания и замена файла
-    # update_project(1, 'Project6', country_id=1, type_id=1, lat='40.7128', long='-74.0060', file_path='test2.zip')
+    get_projects(search_text='7', country_id=2, type_id=1)
     #
-    # print('all projects after updating')
-    # # Получение списка всех проектов (последние версии) после обновления
+    # # # Удаление проекта
+    # delete_project(9)
+    # #
+    # # # Получение списка всех проектов (последние версии) после удаления
     # get_projects()
     #
-    # print('get project by id after updating')
-    # # Получение определенного проекта (последняя версия) после обновления
-    # get_project(6)
+    # # Удаление страны и типа
+    # delete_country(2)
     #
-    # print('get all versions by project id')
-    # # Получение всех версий проекта
-    get_project_versions(1)
-
-    # print('get certain project version')
-    # # Получение определенной версии проекта (версия 1)
-    # get_project_version(6, 1)
-
-    # print('project file')
-    # # Получение файла проекта
-    # get_project_file(project_id)
-    #
-    # print('project image')
-    # # Получение изображения проекта
-    # get_project_image(project_id)
+    # get_project_versions(6)
+    # # Получение списка всех стран и типов после удаления
+    # get_countries()
+    # get_types()
     pass

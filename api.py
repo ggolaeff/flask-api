@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
 from flask_cors import CORS
 from datetime import datetime
+from sqlalchemy import or_
 
 from connect_db import engine
 from models import Base, Project, Country, Type
@@ -118,17 +119,35 @@ def create_project():
 
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
-    projects = db_session.query(Project).order_by(Project.id, Project.version.desc()).all()
+    country_id = request.args.get('country_id')
+    type_id = request.args.get('type_id')
+    search_text = request.args.get('search_text')
+
+    query = db_session.query(Project).filter(Project.deleted_at.is_(None))
+
+    if country_id:
+        query = query.filter(Project.country_id == country_id)
+
+    if type_id:
+        query = query.filter(Project.type_id == type_id)
+
+    if search_text:
+        search_text = f"%{search_text}%"
+        query = query.filter(or_(Project.name.ilike(search_text), Project.description.ilike(search_text)))
+
+    projects = query.order_by(Project.id, Project.version.desc()).all()
+
     latest_projects = {}
     for project in projects:
         if project.id not in latest_projects:
             latest_projects[project.id] = project
+
     return jsonify([project.as_dict() for project in latest_projects.values()])
 
 
 @app.route('/api/projects/<int:project_id>', methods=['GET'])
 def get_project(project_id):
-    project = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).first()
+    project = db_session.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).order_by(Project.version.desc()).first()
     if project:
         return jsonify(project.as_dict())
     else:
@@ -137,7 +156,7 @@ def get_project(project_id):
 
 @app.route('/api/projects/<int:project_id>/versions', methods=['GET'])
 def get_project_versions(project_id):
-    projects = db_session.query(Project).filter(Project.id == project_id).order_by(Project.version.desc()).all()
+    projects = db_session.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).order_by(Project.version.desc()).all()
     if projects:
         return jsonify([project.as_dict() for project in projects])
     else:
@@ -146,7 +165,7 @@ def get_project_versions(project_id):
 
 @app.route('/api/projects/<int:project_id>/versions/<int:version>', methods=['GET'])
 def get_project_version(project_id, version):
-    project = db_session.query(Project).filter(Project.id == project_id, Project.version == version).first()
+    project = db_session.query(Project).filter(Project.id == project_id, Project.version == version, Project.deleted_at.is_(None)).first()
     if project:
         return jsonify(project.as_dict())
     else:
@@ -231,6 +250,39 @@ def get_project_version_image(project_id, version):
         return send_from_directory(os.path.dirname(project.image_path), os.path.basename(project.image_path))
     else:
         return jsonify({"error": "Image not found"}), 404
+
+
+@app.route('/api/projects/<int:project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    project = db_session.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    project.deleted_at = datetime.utcnow()
+    db_session.commit()
+    return jsonify({"message": "Project marked as deleted"}), 200
+
+
+@app.route('/api/countries/<int:country_id>', methods=['DELETE'])
+def delete_country(country_id):
+    country = db_session.query(Country).filter(Country.country_id == country_id).first()
+    if not country:
+        return jsonify({"error": "Country not found"}), 404
+
+    db_session.delete(country)
+    db_session.commit()
+    return jsonify({"message": "Country deleted successfully"}), 200
+
+
+@app.route('/api/types/<int:type_id>', methods=['DELETE'])
+def delete_type(type_id):
+    type_ = db_session.query(Type).filter(Type.type_id == type_id).first()
+    if not type_:
+        return jsonify({"error": "Type not found"}), 404
+
+    db_session.delete(type_)
+    db_session.commit()
+    return jsonify({"message": "Type deleted successfully"}), 200
 
 
 if __name__ == '__main__':
