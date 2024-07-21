@@ -108,14 +108,20 @@ def update_project(project_id, name=None, description=None, country_id=None, typ
         files['file'] = open(file_path, 'rb')
     if image_path:
         files['image'] = open(image_path, 'rb')
-    data = {
-        'name': name,
-        'description': description,
-        'country_id': str(country_id),
-        'type_id': str(type_id),
-        'latitude': str(lat),
-        'longitude': str(long)
-    }
+    data = {}
+    if name is not None:
+        data['name'] = name
+    if description is not None:
+        data['description'] = description
+    if country_id is not None:
+        data['country_id'] = str(country_id)
+    if type_id is not None:
+        data['type_id'] = str(type_id)
+    if lat is not None:
+        data['latitude'] = str(lat)
+    if long is not None:
+        data['longitude'] = str(long)
+
     response = requests.put(url, files=files, data=data)
     try:
         response_data = response.json()
@@ -124,9 +130,12 @@ def update_project(project_id, name=None, description=None, country_id=None, typ
     print(response.status_code, response_data)
 
 
+
 # Удаление проекта
-def delete_project(project_id):
+def delete_project(project_id, version=None):
     url = f'{base_url}/projects/{project_id}'
+    if version is not None:
+        url += f'?version={version}'
     response = requests.delete(url)
     print(response.status_code, response.json())
 
@@ -171,25 +180,30 @@ def get_project_image(project_id):
 
 if __name__ == '__main__':
     # Создание страны и типа
-    # country_id = create_country('Russia')
-    # # type_id = create_type('Map')
+    # country_id = create_country('China')
+    # type_id = create_type('Field')
+
+    # get_countries()
+    # get_types()
     #
     # # Создание проекта с файлом и изображением
-    # project_id = create_project('New_project', 'proj', country_id, 1, '40.7128', '-74.0060', 'test.zip', 'test.jpg')
+    # project_id2 = create_project('Test2', 'proj', country_id, 1, '55.76952', '37.37206', 'test.zip', 'test.jpg')
+    # project_id3 = create_project('Test3', 'proj', 2, 3, '55.76341', '37.66116', 'test.zip', 'test3.jpg')
+    # project_id4 = create_project('Test4', 'proj', 2, 4, '55.75202', '37.61813', 'test.zip', 'test4.jpg')
     #
     # # Получение списка всех проектов (последние версии)
-    get_projects(search_text='7', country_id=2, type_id=1)
+    # get_projects()
     #
     # # # Удаление проекта
-    # delete_project(9)
+    # delete_project(15)
     # #
     # # # Получение списка всех проектов (последние версии) после удаления
     # get_projects()
-    #
+    # update_project(13, image_path='test2.jpg')
     # # Удаление страны и типа
-    # delete_country(2)
+    # delete_country(3)
     #
-    # get_project_versions(6)
+    # get_project_versions(1)
     # # Получение списка всех стран и типов после удаления
     # get_countries()
     # get_types()

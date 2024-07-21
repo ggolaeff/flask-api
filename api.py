@@ -180,6 +180,7 @@ def update_project(project_id):
 
     version = get_new_version(project_id)
 
+    # Обновляем поля только если они были переданы в запросе
     new_project = Project(
         id=project.id,
         name=request.form.get('name', project.name),
@@ -192,8 +193,6 @@ def update_project(project_id):
         file_path=project.file_path,
         image_path=project.image_path
     )
-    db_session.add(new_project)
-    db_session.commit()
 
     project_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(new_project.id), f"v{version}")
     os.makedirs(project_folder, exist_ok=True)
@@ -212,7 +211,9 @@ def update_project(project_id):
         image.save(imagepath)
         new_project.image_path = imagepath
 
+    db_session.add(new_project)
     db_session.commit()
+
     return jsonify({"message": "Project updated successfully", "version": version}), 200
 
 
@@ -252,13 +253,24 @@ def get_project_version_image(project_id, version):
         return jsonify({"error": "Image not found"}), 404
 
 
-@app.route('/api/projects/<int:project_id>', methods=['DELETE'])
-def delete_project(project_id):
-    project = db_session.query(Project).filter(Project.project_id == project_id).first()
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
+@app.route('/api/projects/<int:id>', methods=['DELETE'])
+def delete_project(id):
+    version = request.args.get('version')
 
-    project.deleted_at = datetime.utcnow()
+    if version:
+        project = db_session.query(Project).filter(Project.id == id, Project.version == version).first()
+        if not project:
+            return jsonify({"error": "Project version not found"}), 404
+
+        project.deleted_at = datetime.utcnow()
+    else:
+        projects = db_session.query(Project).filter(Project.id == id).all()
+        if not projects:
+            return jsonify({"error": "Project not found"}), 404
+
+        for project in projects:
+            project.deleted_at = datetime.utcnow()
+
     db_session.commit()
     return jsonify({"message": "Project marked as deleted"}), 200
 
@@ -269,6 +281,16 @@ def delete_country(country_id):
     if not country:
         return jsonify({"error": "Country not found"}), 404
 
+    # Проверяем, есть ли активные проекты, которые ссылаются на страну
+    active_projects_count = db_session.query(Project).filter(
+        Project.country_id == country_id,
+        Project.deleted_at.is_(None)  # Только активные проекты
+    ).count()
+
+    if active_projects_count > 0:
+        return jsonify({"error": "Cannot delete country as it is referenced by one or more active projects"}), 400
+
+    # Если нет активных проектов, удаляем страну
     db_session.delete(country)
     db_session.commit()
     return jsonify({"message": "Country deleted successfully"}), 200
@@ -280,6 +302,16 @@ def delete_type(type_id):
     if not type_:
         return jsonify({"error": "Type not found"}), 404
 
+    # Проверяем, есть ли активные проекты, которые ссылаются на тип
+    active_projects_count = db_session.query(Project).filter(
+        Project.type_id == type_id,
+        Project.deleted_at.is_(None)  # Только активные проекты
+    ).count()
+
+    if active_projects_count > 0:
+        return jsonify({"error": "Cannot delete type as it is referenced by one or more active projects"}), 400
+
+    # Если нет активных проектов, удаляем тип
     db_session.delete(type_)
     db_session.commit()
     return jsonify({"message": "Type deleted successfully"}), 200
